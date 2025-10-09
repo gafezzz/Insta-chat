@@ -1,0 +1,52 @@
+name: Build and Release Electron App (Windows)
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build_windows:
+    runs-on: windows-latest
+
+    permissions:
+      contents: write
+
+    env:
+      APP_DIR: .
+      NODE_VERSION: 22.16.0
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: npm ci
+
+      - name: Build Windows App
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run build
+
+      - name: Zip win-unpacked folder
+        run: |
+          $source = Get-ChildItem "${{ env.APP_DIR }}\release" -Recurse -Directory | Where-Object { $_.Name -eq "win-unpacked" }
+          foreach ($folder in $source) {
+            $zipPath = Join-Path $folder.Parent.FullName "win-unpacked.zip"
+            Compress-Archive -Path $folder.FullName -DestinationPath $zipPath -Force
+          }
+
+      - name: Upload built app to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.APP_DIR }}/release/**/*Setup.exe
+            ${{ env.APP_DIR }}/release/**/win-unpacked.zip
